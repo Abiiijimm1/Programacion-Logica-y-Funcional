@@ -1,0 +1,224 @@
+# index.html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algoritmos Genéticos</title>
+    <style>
+        body {
+            background-color: #ffe6ff; /* Rosa pálido */
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            color: #800080; /* Púrpura */
+            background-color: #fff; /* Blanco */
+            padding: 10px;
+            width: 50%;
+            margin: 20px auto;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        h2 {
+            color: #fff; /* Blanco */
+            background-color: #800080; /* Púrpura */
+            cursor: pointer;
+            padding: 10px;
+            width: 20%;
+            margin: 20px auto;
+            border-radius: 5px;
+            box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            font-size: 18px;
+        }
+
+        p {
+            color: #333; /* Gris oscuro */
+            text-align: center;
+        }
+
+        #tabla-container {
+            width: 50%;
+            margin: 20px auto;
+            background-color: #fff; /* Blanco */
+            display: none; 
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            border: 1px solid #ccc; /* Gris claro */
+            padding: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Algoritmos Genéticos</h1>
+
+    <h2 onclick="toggleTable()">Ver Mejor Gen</h2>
+
+    <div id="tabla-container">
+        <table>
+            <tr>
+                <th>Variable</th>
+                <th>Valor</th>
+            </tr>
+            {% for variable, valor in mejor_gen.items() %}
+                <tr>
+                    <td>{{ variable }}</td>
+                    <td>{{ valor }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+        <p>Función de Adaptación: {{ adaptacion }}</p>
+    </div>
+
+    <script>
+        function toggleTable() {
+            var tablaContainer = document.getElementById("tabla-container");
+            tablaContainer.style.display = (tablaContainer.style.display === "none") ? "block" : "none";
+        }
+    </script>
+</body>
+</html>
+
+-------------------------------------------------------------------------------------------------------------------
+#flask.py
+
+from flask import Flask, render_template
+import random
+
+app = Flask(__name__)
+
+def poblacion_inicial(max_poblacion, num_vars):
+    poblacion = []
+    for i in range(max_poblacion):
+        gen = []
+        for j in range(num_vars):
+            if random.random() > 0.5:
+                gen.append(1)
+            else:
+                gen.append(0)
+        poblacion.append(gen[:])
+    return poblacion
+
+def adaptacion_3sat(gen, solucion):
+    n = 3
+    cont = 0
+    clausula_ok = True
+    for i in range(len(gen)):
+        n = n - 1
+        if (gen[i] != solucion[i]):
+            clausula_ok = False
+            if n == 0:
+                if clausula_ok:
+                    cont = cont + 1
+                n = 3
+                clausula_ok = True
+        if n == 0:
+            if clausula_ok:
+                cont = cont + 1
+    return cont
+
+def evalua_poblacion(poblacion, solucion):
+    adaptacion = []
+    for i in range(len(poblacion)):
+        adaptacion.append(adaptacion_3sat(poblacion[i], solucion))
+    return adaptacion
+
+def seleccion(poblacion, solucion):
+    adaptacion = evalua_poblacion(poblacion, solucion)
+    total = sum(adaptacion)
+    val1 = random.randint(0, total)
+    val2 = random.randint(0, total)
+    sum_sel = 0
+    for i in range(len(adaptacion)):
+        sum_sel = sum_sel + adaptacion[i]
+        if sum_sel >= val1:
+            gen1 = poblacion[i]
+            break
+    sum_sel = 0
+    for i in range(len(adaptacion)):
+        sum_sel = sum_sel + adaptacion[i]
+        if sum_sel >= val2:
+            gen2 = poblacion[i]
+            break
+    return gen1, gen2
+
+def cruce(gen1, gen2):
+    nuevo_gen1 = []
+    nuevo_gen2 = []
+    corte = random.randint(0, len(gen1)-1)
+    nuevo_gen1[0:corte] = gen1[0:corte]
+    nuevo_gen1[corte:] = gen2[corte:]
+    nuevo_gen2[0:corte] = gen2[0:corte]
+    nuevo_gen2[corte:] = gen1[corte:]
+    return nuevo_gen1, nuevo_gen2
+
+def mutacion(prob, gen):
+    if random.random() < prob:
+        cromosoma = random.randint(0, len(gen)-1)
+        if gen[cromosoma] == 0:
+            gen[cromosoma] = 1
+        else:
+            gen[cromosoma] = 0
+    return gen
+
+def elimina_peores_genes(poblacion, solucion):
+    adaptacion = evalua_poblacion(poblacion, solucion)
+    for _ in range(2):
+        i = adaptacion.index(min(adaptacion))
+        del poblacion[i]
+        del adaptacion[i]
+
+def mejor_gen(poblacion, solucion):
+    adaptacion = evalua_poblacion(poblacion, solucion)
+    return poblacion[adaptacion.index(max(adaptacion))]
+
+def algoritmo_genetico():
+    max_iter = 10
+    max_poblacion = 50
+    num_vars = 10
+    fin = False
+    solucion = poblacion_inicial(1, num_vars)[0]
+    poblacion = poblacion_inicial(max_poblacion, num_vars)
+    
+    iteraciones = 0
+    while not fin:
+        iteraciones = iteraciones + 1
+        for i in range((len(poblacion))//2):
+            gen1, gen2 = seleccion(poblacion, solucion)
+            nuevo_gen1, nuevo_gen2 = cruce(gen1, gen2)
+            nuevo_gen1 = mutacion(0.1, nuevo_gen1)
+            nuevo_gen2 = mutacion(0.1, nuevo_gen2)
+            poblacion.append(nuevo_gen1)
+            poblacion.append(nuevo_gen2)
+            elimina_peores_genes(poblacion, solucion)
+            
+        if max_iter < iteraciones:
+            fin = True
+    print("Solución: " + str(solucion))
+    
+    mejor = mejor_gen(poblacion, solucion)
+    return mejor, adaptacion_3sat(mejor, solucion)
+
+@app.route('/')
+def index():
+    mejor_gen, adaptacion = algoritmo_genetico()
+    mejor_gen_dict = {f"Variable {i + 1}": valor for i, valor in enumerate(mejor_gen)}
+    return render_template('index.html', mejor_gen=mejor_gen_dict, adaptacion=adaptacion)
+
+if __name__ == '__main__':
+    random.seed()
+    app.run(debug=True)
